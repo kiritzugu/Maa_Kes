@@ -1,0 +1,794 @@
+{
+    "task": [
+        {
+            "name": "日常-模拟-战斗训练",
+            "label": "模拟-战斗训练",
+            "icon": "./resource/image/图标/任务图标/模拟.png",
+            "default_check": true,
+            "group": [
+                "日常"
+            ],
+            "entry": "清体力-任务开始层",
+            "description": "",
+            "option": [
+                "日常-模拟-刷取大类型分类"
+            ]
+        }
+    ],
+    "option": {
+        "日常-模拟-战斗训练-战斗效率自定义-普通副本": {
+            "label": "战斗效率自定义",
+            "type": "switch",
+            "icon": "",
+            "description": "关闭自定义时，默认将体力全部刷完",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-已进入编队界面": {
+                            "next": [
+                                "日常-模拟-战斗训练-体力消耗选择层"
+                            ]
+                        }
+                    },
+                    "option": [
+                        "日常-模拟-战斗训练-战斗效率自定义-轮次选择", //适用于周本、记忆碎片之外的任务
+                        "日常-模拟-战斗训练-战斗效率自定义-每轮刷取次数选择" //适用于所有
+                    ]
+                },
+                {
+                    "name": "No",
+                    "pipeline_override": {}
+                }
+            ]
+        },
+        "日常-模拟-战斗训练-战斗效率自定义-特殊副本": {
+            "label": "战斗效率自定义",
+            "type": "switch",
+            "icon": "",
+            "description": "关闭自定义时，默认将体力全部刷完",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-已进入编队界面": {
+                            "next": [
+                                "日常-模拟-战斗训练-体力消耗选择层"
+                            ]
+                        }
+                    },
+                    "option": [
+                        "日常-模拟-战斗训练-战斗效率自定义-每轮刷取次数选择" //适用于所有
+                    ]
+                },
+                {
+                    "name": "No",
+                    "pipeline_override": {}
+                }
+            ]
+        },
+        "日常-模拟-战斗训练-战斗效率自定义-轮次选择": {
+            "label": "轮次选择",
+            "description": "选择战斗几次,个人认为最多四五次",
+            "type": "input",
+            "inputs": [
+                {
+                    "name": "模拟-战斗训练-战斗效率自定义-轮次次数自定义",
+                    "label": "输入轮次",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^\\d+$",
+                    "pattern_msg": "请输入有效的数字"
+                }
+            ],
+            "pipeline_override": {
+                "日常-模拟-战斗训练-战斗计次选择-次数记录层": {
+                    "max_hit": "{模拟-战斗训练-战斗效率自定义-轮次次数自定义}"
+                }
+            }
+        },
+        "日常-模拟-战斗训练-战斗效率自定义-每轮刷取次数选择": {
+            "label": "每轮刷取次数选择",
+            "description": "选择每次战斗消耗多少体力",
+            "type": "select",
+            "default_case": "战斗训练-战斗效率自定义-每轮刷取次数选择-每次50体力",
+            "cases": [
+                {
+                    "name": "战斗训练-战斗效率自定义-每轮刷取次数选择-每次10体力",
+                    "label": "每次10体力",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-体力消耗选择-已指定每轮消耗的体力": {
+                            "roi": [
+                                928,
+                                571,
+                                51,
+                                53
+                            ]
+                        },
+                        "日常-模拟-战斗训练-体力消耗选择-指定轮次-移动黄球到指定位置": {
+                            "target": [
+                                928,
+                                571,
+                                51,
+                                53
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "战斗训练-战斗效率自定义-每轮刷取次数选择-每次20体力",
+                    "label": "每次20体力",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-体力消耗选择-已指定每轮消耗的体力": {
+                            "roi": [
+                                983,
+                                571,
+                                53,
+                                55
+                            ]
+                        },
+                        "日常-模拟-战斗训练-体力消耗选择-指定轮次-移动黄球到指定位置": {
+                            "target": [
+                                983,
+                                571,
+                                53,
+                                55
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "战斗训练-战斗效率自定义-每轮刷取次数选择-每次30体力",
+                    "label": "每次30体力",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-体力消耗选择-已指定每轮消耗的体力": {
+                            "roi": [
+                                1042,
+                                572,
+                                46,
+                                52
+                            ]
+                        },
+                        "日常-模拟-战斗训练-体力消耗选择-指定轮次-移动黄球到指定位置": {
+                            "target": [
+                                1042,
+                                572,
+                                46,
+                                52
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "战斗训练-战斗效率自定义-每轮刷取次数选择-每次40体力",
+                    "label": "每次40体力",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-体力消耗选择-已指定每轮消耗的体力": {
+                            "roi": [
+                                1094,
+                                572,
+                                50,
+                                55
+                            ]
+                        },
+                        "日常-模拟-战斗训练-体力消耗选择-指定轮次-移动黄球到指定位置": {
+                            "target": [
+                                1094,
+                                572,
+                                50,
+                                55
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "战斗训练-战斗效率自定义-每轮刷取次数选择-每次50体力",
+                    "label": "每次50体力",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-体力消耗选择-已指定每轮消耗的体力": {
+                            "roi": [
+                                1146,
+                                572,
+                                54,
+                                51
+                            ]
+                        },
+                        "日常-模拟-战斗训练-体力消耗选择-指定轮次-移动黄球到指定位置": {
+                            "target": [
+                                1146,
+                                572,
+                                54,
+                                51
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        "日常-模拟-刷取大类型分类": {
+            "label": "类型选择",
+            "type": "select",
+            "default_case": "清体力-成长",
+            "cases": [
+                {
+                    "name": "清体力-成长",
+                    "label": "成长(基础养成材料)",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-已选中指定副本类型": {
+                            "recognition": {
+                                "type": "TemplateMatch",
+                                "param": {
+                                    "roi": [
+                                        164,
+                                        67,
+                                        209,
+                                        103
+                                    ],
+                                    "template": [
+                                        "日常/模拟/战斗训练/成长/已选中.png"
+                                    ]
+                                }
+                            },
+                            "focus": {
+                                "Node.Recognition.Succeeded": "已选中副本类型-成长"
+                            }
+                        },
+                        "日常-模拟-战斗训练-点击选中指定副本类型": {
+                            "recognition": {
+                                "type": "TemplateMatch",
+                                "param": {
+                                    "roi": [
+                                        11,
+                                        62,
+                                        141,
+                                        120
+                                    ],
+                                    "template": [
+                                        "日常/模拟/战斗训练/成长/未选中.png"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "option": [
+                        "日常-模拟-战斗训练-刷取材料选择-成长",
+                        "日常-模拟-战斗训练-战斗效率自定义-普通副本"
+                    ]
+                },
+                {
+                    "name": "清体力-主战员",
+                    "label": "主战员(主战员晋升材料)",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-已选中指定副本类型": {
+                            "recognition": {
+                                "type": "TemplateMatch",
+                                "param": {
+                                    "roi": [
+                                        177,
+                                        150,
+                                        204,
+                                        96
+                                    ],
+                                    "template": [
+                                        "日常/模拟/战斗训练/主战员/已选中.png"
+                                    ]
+                                }
+                            },
+                            "focus": {
+                                "Node.Recognition.Succeeded": "已选中副本类型-主战员"
+                            }
+                        },
+                        "日常-模拟-战斗训练-点击选中指定副本类型": {
+                            "recognition": {
+                                "type": "TemplateMatch",
+                                "param": {
+                                    "roi": [
+                                        28,
+                                        141,
+                                        102,
+                                        113
+                                    ],
+                                    "template": [
+                                        "日常/模拟/战斗训练/主战员/未选中.png"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "option": [
+                        "日常-模拟-战斗训练-刷取材料选择-主战员",
+                        "日常-模拟-战斗训练-战斗效率自定义-普通副本"
+                    ]
+                },
+                {
+                    "name": "清体力-辅战员",
+                    "label": "辅战员(辅战员晋升材料)",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-已选中指定副本类型": {
+                            "recognition": {
+                                "type": "TemplateMatch",
+                                "param": {
+                                    "roi": [
+                                        181,
+                                        227,
+                                        122,
+                                        101
+                                    ],
+                                    "template": [
+                                        "日常/模拟/战斗训练/辅战员/已选中.png"
+                                    ]
+                                }
+                            },
+                            "focus": {
+                                "Node.Recognition.Succeeded": "已选中副本类型-辅战员"
+                            }
+                        },
+                        "日常-模拟-战斗训练-点击选中指定副本类型": {
+                            "recognition": {
+                                "type": "TemplateMatch",
+                                "param": {
+                                    "roi": [
+                                        37,
+                                        240,
+                                        81,
+                                        83
+                                    ],
+                                    "template": [
+                                        "日常/模拟/战斗训练/辅战员/未选中.png"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "option": [
+                        "日常-模拟-战斗训练-刷取材料选择-辅战员",
+                        "日常-模拟-战斗训练-战斗效率自定义-普通副本"
+                    ]
+                },
+                {
+                    "name": "清体力-潜能",
+                    "label": "潜能(主战员技能升级材料)",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-已选中指定副本类型": {
+                            "recognition": {
+                                "type": "TemplateMatch",
+                                "param": {
+                                    "roi": [
+                                        159,
+                                        307,
+                                        108,
+                                        109
+                                    ],
+                                    "template": [
+                                        "日常/模拟/战斗训练/潜能/已选中.png"
+                                    ]
+                                }
+                            },
+                            "focus": {
+                                "Node.Recognition.Succeeded": "已选中副本类型-潜能"
+                            }
+                        },
+                        "日常-模拟-战斗训练-点击选中指定副本类型": {
+                            "recognition": {
+                                "type": "TemplateMatch",
+                                "param": {
+                                    "roi": [
+                                        35,
+                                        316,
+                                        83,
+                                        87
+                                    ],
+                                    "template": [
+                                        "日常/模拟/战斗训练/潜能/未选中.png"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "option": [
+                        "日常-模拟-战斗训练-刷取材料选择-潜能",
+                        "日常-模拟-战斗训练-战斗效率自定义-普通副本"
+                    ]
+                },
+                //以下为无法在单次挑战中选择挑战次数的副本
+                {
+                    "name": "清体力-记忆碎片",
+                    "label": "记忆碎片(圣遗物(bushi))",
+                    "description": "暂时无法设定挑战次数,待重构",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-已选中指定副本类型": {
+                            "recognition": {},
+                            "focus": {
+                                "Node.Recognition.Succeeded": "已选中副本类型-主战员"
+                            }
+                        },
+                        "日常-模拟-战斗训练-点击选中指定副本类型": {
+                            "recognition": {}
+                        }
+                    },
+                    "option": [
+                        // "日常-模拟-记忆碎片刷取选择"
+                    ]
+                },
+                {
+                    "name": "清体力-挑战",
+                    "label": "挑战(周本)",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-已选中指定副本类型": {
+                            "recognition": {},
+                            "focus": {
+                                "Node.Recognition.Succeeded": "已选中副本类型-主战员"
+                            }
+                        },
+                        "日常-模拟-战斗训练-点击选中指定副本类型": {
+                            "recognition": {}
+                        }
+                    },
+                    "option": [
+                        "日常-模拟-挑战刷取选择"
+                    ]
+                }
+            ]
+        },
+        "日常-模拟-战斗训练-刷取材料选择-成长": {
+            "label": "具体材料选择",
+            "type": "select",
+            "cases": [
+                //成长：
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-成长-单元币",
+                    "label": "单元币",
+                    "icon": "./resource/image/图标/养成材料/单元币.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/成长/单元币.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：单元币"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-成长-主战员升级材料",
+                    "label": "主战员升级材料",
+                    "icon": "./resource/image/图标/养成材料/主战升级.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/成长/主战员升级材料.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：主战员升级材料"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-成长-辅战员升级材料",
+                    "label": "辅战员升级材料",
+                    "icon": "./resource/image/图标/养成材料/辅战升级.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/成长/辅战员升级材料.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：辅战员升级材料"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "日常-模拟-战斗训练-刷取材料选择-主战员": {
+            "label": "具体材料选择",
+            "type": "select",
+            "cases": [
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-主战员-前锋",
+                    "label": "前锋",
+                    "icon": "./resource/image/图标/职业分支/前锋.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/主战员/前锋.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：前锋"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-主战员-守卫",
+                    "label": "守卫",
+                    "icon": "./resource/image/图标/职业分支/守卫.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/主战员/守卫.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：守卫"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-主战员-游侠",
+                    "label": "游侠",
+                    "icon": "./resource/image/图标/职业分支/游侠.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/主战员/游侠.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：游侠"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-主战员-猎人",
+                    "label": "猎人",
+                    "icon": "./resource/image/图标/职业分支/猎人.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/主战员/猎人.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：猎人"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-主战员-奥义师",
+                    "label": "奥义师",
+                    "icon": "./resource/image/图标/职业分支/奥义师.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/主战员/奥义师.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：奥义师"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-主战员-操控师",
+                    "label": "操控师",
+                    "icon": "./resource/image/图标/职业分支/操控师.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/主战员/操控师.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：操控师"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "日常-模拟-战斗训练-刷取材料选择-辅战员": {
+            "label": "具体材料选择",
+            "type": "select",
+            "cases": [
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-辅战员-前锋",
+                    "label": "前锋",
+                    "icon": "./resource/image/图标/职业分支/前锋.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/辅战员/前锋.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：前锋"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-辅战员-守卫",
+                    "label": "守卫",
+                    "icon": "./resource/image/图标/职业分支/守卫.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/辅战员/守卫.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：守卫"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-辅战员-游侠",
+                    "label": "游侠",
+                    "icon": "./resource/image/图标/职业分支/游侠.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/辅战员/游侠.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：游侠"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-辅战员-猎人",
+                    "label": "猎人",
+                    "icon": "./resource/image/图标/职业分支/猎人.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/辅战员/猎人.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：猎人"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-辅战员-奥义师",
+                    "label": "奥义师",
+                    "icon": "./resource/image/图标/职业分支/奥义师.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/辅战员/奥义师.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：奥义师"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-辅战员-操控师",
+                    "label": "操控师",
+                    "icon": "./resource/image/图标/职业分支/操控师.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/辅战员/操控师.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：操控师"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "日常-模拟-战斗训练-刷取材料选择-潜能": {
+            "label": "具体材料选择",
+            "type": "select",
+            "cases": [
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-潜能-热情",
+                    "label": "热情",
+                    "icon": "./resource/image/图标/属性/热情.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/潜能/热情.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：热情"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-潜能-秩序",
+                    "label": "秩序",
+                    "icon": "./resource/image/图标/属性/秩序.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/潜能/秩序.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：秩序"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-潜能-本能",
+                    "label": "本能",
+                    "icon": "./resource/image/图标/属性/本能.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/潜能/本能.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：本能"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-潜能-虚无",
+                    "label": "虚无",
+                    "icon": "./resource/image/图标/属性/虚无.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/潜能/虚无.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：虚无"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-战斗训练-刷取材料选择-潜能-正义",
+                    "label": "正义",
+                    "icon": "./resource/image/图标/属性/正义.png",
+                    "pipeline_override": {
+                        "日常-模拟-战斗训练-寻找选中类型材料": {
+                            "template": [
+                                "日常/模拟/战斗训练/潜能/正义.png"
+                            ],
+                            "focus": {
+                                "Node.Recognition.Succeeded": "当前选中副本为：正义"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        //记忆碎片(圣遗物)
+        //挑战(周本)
+        "日常-模拟-挑战刷取选择": {
+            "label": "挑战刷取选择",
+            "type": "select",
+            "default_case": "日常-模拟-挑战刷取选择-哀嚎的浪子",
+            "cases": [
+                {
+                    "name": "日常-模拟-挑战刷取选择-哀嚎的浪子",
+                    "label": "哀嚎的浪子",
+                    "icon": "./resource/image/图标/养成材料/周本掉落/哀嚎的浪子之瞳.png",
+                    // "description": "./resource/image/图标/养成材料/周本掉落/哀嚎的浪子之瞳.png",
+                    "pipeline_override": {
+                        "清体力-挑战-刷取选择接口": {
+                            "template": [
+                                "日常/模拟/战斗训练/周本挑战/BOSS头像/哀嚎的浪子.png"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "日常-模拟-挑战刷取选择-直面恐惧",
+                    "label": "直面恐惧",
+                    "icon": "./resource/image/图标/养成材料/周本掉落/谴责碎片.png",
+                    // "description": "./resource/image/图标/养成材料/周本掉落/谴责碎片.png",
+                    "pipeline_override": {
+                        "清体力-挑战-刷取选择接口": {
+                            "template": [
+                                "日常/模拟/战斗训练/周本挑战/BOSS头像/直面恐惧.png"
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
