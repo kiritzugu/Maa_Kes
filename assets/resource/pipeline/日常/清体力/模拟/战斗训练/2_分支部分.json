@@ -1,0 +1,130 @@
+{
+    "日常-模拟-战斗训练-已选中指定副本类型": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [
+                    127,
+                    59,
+                    295,
+                    552
+                ],
+                "template": [
+                    "日常/模拟/战斗训练/记忆碎片/已选中.png"
+                ]
+            }
+        },
+        "focus": {
+            "Node.Recognition.Succeeded": "已选中副本类型-成长"
+        },
+        "next": [
+            "日常-模拟-战斗训练-寻找选中类型材料",
+            "[JumpBack]日常-模拟-战斗训练-副本寻找缓冲层",
+            "[JumpBack]日常-模拟-战斗训练-找不到指定材料_将滑动"
+        ]
+    },
+    "日常-模拟-战斗训练-副本寻找缓冲层": {
+        "max_hit": 3,
+        "recognition": "DirectHit",
+        "post_delay": 1000
+    },
+    "日常-模拟-战斗训练-点击选中指定副本类型": {
+        //option
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [
+                    35,
+                    316,
+                    83,
+                    87
+                ],
+                "template": [
+                    "日常/模拟/战斗训练/主战员/未选中.png"
+                ]
+            }
+        },
+        "action": "Click"
+    },
+    "日常-模拟-战斗训练-寻找选中类型材料": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                //先识别选中材料，然后识别最近的体力然后偏移
+                "roi": [
+                    1013,
+                    66,
+                    262,
+                    652
+                ],
+                "threshold": 0.9,
+                "order_by": "Score",
+                // "method": 10001,//潜能总不能给我来个新属性吧那我真的要闹了
+                "template": [
+                    "日常/模拟/战斗训练/记忆碎片/金龟子与约定.png"
+                ]
+            }
+        },
+        "focus": {
+            "Node.Recognition.Succeeded": "当前选中的具体副本为：操控师"
+        },
+        "next": [
+            "日常-模拟-战斗训练-寻找最近的体力标识并进行偏移点击",
+            "[JumpBack]日常-模拟-战斗训练-找不到指定材料_将滑动"
+        ]
+    },
+    "日常-模拟-战斗训练-找不到指定材料_将滑动": {
+        "action": {
+            "type": "Swipe",
+            "param": {
+                "begin": [
+                    1010,
+                    487,
+                    39,
+                    14
+                ],
+                "end": [
+                    1010,
+                    211,
+                    39,
+                    14
+                ],
+                "end_hold": 1000,
+                "duration": 500
+            }
+        },
+        "post_delay": 1000
+    },
+    "日常-模拟-战斗训练-寻找最近的体力标识并进行偏移点击": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": "日常-模拟-战斗训练-寻找选中类型材料",
+                "roi_offset": [
+                    -20,
+                    35,
+                    150,
+                    25
+                ],
+                "template": [
+                    "日常/模拟/战斗训练/体力标识-索引用.png"
+                ]
+            }
+        },
+        "action": {
+            "type": "Click",
+            "param": {
+                "target_offset": [
+                    -300,
+                    -50,
+                    100,
+                    30
+                ]
+            }
+        },
+        "next": [
+            "日常-模拟-战斗训练-已进入编队界面",
+            "[JumpBack]日常-模拟-战斗训练-找不到指定材料_将滑动"
+        ]
+    }
+}
