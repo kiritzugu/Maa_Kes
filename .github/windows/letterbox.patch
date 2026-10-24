@@ -1,0 +1,720 @@
+diff --git a/MFAAvalonia.Letterbox.Tests/LetterboxTests.cs b/MFAAvalonia.Letterbox.Tests/LetterboxTests.cs
+new file mode 100644
+index 0000000..c3519a6
+--- /dev/null
++++ b/MFAAvalonia.Letterbox.Tests/LetterboxTests.cs
+@@ -0,0 +1,212 @@
++using MaaFramework.Binding;
++using MaaFramework.Binding.Buffers;
++using MaaFramework.Binding.Custom;
++using MFAAvalonia.Extensions.MaaFW.Controllers;
++using Xunit;
++
++namespace MFAAvalonia.Letterbox.Tests;
++
++public class LetterboxTests
++{
++    [Theory]
++    [InlineData(2560, 1600, 80, 1440)]
++    [InlineData(1920, 1200, 60, 1080)]
++    [InlineData(1280, 800, 40, 720)]
++    [InlineData(1280, 720, 0, 720)]
++    [InlineData(2560, 1440, 0, 1440)]
++    [InlineData(1920, 1080, 0, 1080)]
++    public void ContentRectangleAndBounds(int width, int height, int top, int contentHeight)
++    {
++        var pixels = Image(width, height);
++        Assert.True(LetterboxViewport.TryCreate(pixels, width, height, 3, out var view));
++        Assert.Equal(new LetterboxViewport(width, height, top, contentHeight), view);
++        int x = width - 1, y = contentHeight - 1;
++        Assert.True(view.TryMap(ref x, ref y));
++        Assert.Equal(top + contentHeight - 1, y);
++        x = y = -1;
++        Assert.True(view.TryMap(ref x, ref y));
++        Assert.Equal(-1, y);
++        x = width; y = 0;
++        Assert.False(view.TryMap(ref x, ref y));
++        x = 0; y = contentHeight;
++        Assert.False(view.TryMap(ref x, ref y));
++        x = -2; y = 0;
++        Assert.False(view.TryMap(ref x, ref y));
++    }
++
++    [Fact]
++    public void RejectsEitherNonBlackBandAndMalformedInput()
++    {
++        var pixels = Image(2560, 1600);
++        Array.Fill(pixels, (byte)255, 0, 80 * 2560 * 3);
++        Assert.False(LetterboxViewport.TryCreate(pixels, 2560, 1600, 3, out _));
++        pixels = Image(2560, 1600);
++        Array.Fill(pixels, (byte)255, 1520 * 2560 * 3, 80 * 2560 * 3);
++        Assert.False(LetterboxViewport.TryCreate(pixels, 2560, 1600, 3, out _));
++        Assert.False(LetterboxViewport.TryCreate([], 2560, 1600, 3, out _));
++        Assert.False(LetterboxViewport.TryCreate(pixels, 2560, 1600, 1, out _));
++        Assert.False(LetterboxViewport.TryCreate(pixels, 2560, 1601, 3, out _));
++    }
++
++    [Fact]
++    public void ToleratesSmallOverlayAndIgnoresAlpha()
++    {
++        var pixels = Image(2560, 1600);
++        pixels[0] = 255;
++        Assert.True(LetterboxViewport.TryCreate(pixels, 2560, 1600, 3, out _));
++        var rgba = new byte[2560 * 1600 * 4];
++        for (var i = 3; i < rgba.Length; i += 4) rgba[i] = 255;
++        Assert.True(LetterboxViewport.TryCreate(rgba, 2560, 1600, 4, out _));
++    }
++
++    // Exercises the real native custom-controller ABI and BOTH framework scaling
++    // layers. The fake backend receives input; no actual desktop window is used.
++    [Fact]
++    public unsafe void NativeRoundTripScalesOnlyOnceAndOffsetsInput()
++    {
++        using var fixture = new Fixture();
++        var outer = fixture.Outer;
++        Assert.Equal(MaaJobStatus.Succeeded, outer.Screencap().Wait());
++        using var image = new MaaImageBuffer();
++        Assert.True(outer.GetCachedImage(image));
++        Assert.Equal((1280, 720), (image.Width, image.Height));
++        Assert.True(image.TryGetRawData(out var pointer));
++        Assert.Equal((byte)31, *(byte*)pointer);
++        Assert.Equal(MaaJobStatus.Succeeded, outer.Click(679, 256).Wait());
++        Assert.Contains((1358, 592), fixture.Backend.Points);
++        fixture.Backend.Points.Clear();
++        Assert.Equal(MaaJobStatus.Succeeded, outer.Swipe(100, 100, 200, 200, 100).Wait());
++        Assert.Equal((200, 280), fixture.Backend.Points.First());
++        Assert.Equal((400, 480), fixture.Backend.Points.Last());
++        Assert.Equal(MaaJobStatus.Succeeded, outer.TouchDown(1, 10, 20, 3).Wait());
++        Assert.Equal((20, 120), fixture.Backend.Points.Last());
++        Assert.Equal(MaaJobStatus.Succeeded, outer.TouchMove(1, 20, 30, 3).Wait());
++        Assert.Equal((40, 140), fixture.Backend.Points.Last());
++        Assert.Equal(MaaJobStatus.Succeeded, outer.TouchUp(1).Wait());
++        Assert.Equal(MaaJobStatus.Succeeded, outer.Scroll(120, -120).Wait());
++        Assert.Equal((120, -120), fixture.Backend.ScrollDelta);
++        Assert.Equal(MaaJobStatus.Succeeded, outer.RelativeMove(7, -3).Wait());
++        Assert.Equal((7, -3), fixture.Backend.RelativeDelta);
++        Assert.Equal(MaaJobStatus.Succeeded, outer.InputText("test").Wait());
++        Assert.Equal("test", fixture.Backend.Text);
++        Assert.Equal(MaaJobStatus.Succeeded, outer.KeyDown(65).Wait());
++        Assert.Equal(MaaJobStatus.Succeeded, outer.KeyUp(65).Wait());
++        Assert.Equal(MaaJobStatus.Succeeded, outer.Inactive().Wait());
++        Assert.True(fixture.Backend.WasInactive);
++    }
++
++    [Fact]
++    public void ResizeAndInvalidCaptureBlockInputButAllowReleaseAndRecovery()
++    {
++        using var fixture = new Fixture();
++        var outer = fixture.Outer;
++        Assert.Equal(MaaJobStatus.Succeeded, outer.Screencap().Wait());
++        fixture.Size = (1280, 720);
++        Assert.Equal(MaaJobStatus.Failed, outer.TouchDown(0, 5, 5).Wait());
++        Assert.Empty(fixture.Backend.Points);
++        Assert.Equal(MaaJobStatus.Succeeded, outer.TouchUp(0).Wait());
++        fixture.Backend.Width = 1280; fixture.Backend.Height = 720;
++        Assert.Equal(MaaJobStatus.Succeeded, outer.Screencap().Wait());
++        Assert.Equal(MaaJobStatus.Succeeded, outer.Click(300, 200).Wait());
++        Assert.Equal((300, 200), fixture.Backend.Points.Last());
++        fixture.Size = (2560, 1600);
++        fixture.Backend.Width = 2560; fixture.Backend.Height = 1600;
++        fixture.Backend.ValidBars = false;
++        Assert.Equal(MaaJobStatus.Failed, outer.Screencap().Wait());
++        fixture.Backend.Points.Clear();
++        Assert.Equal(MaaJobStatus.Failed, outer.TouchDown(0, 5, 5).Wait());
++        Assert.Empty(fixture.Backend.Points);
++        Assert.Equal(MaaJobStatus.Succeeded, outer.KeyUp(65).Wait());
++        fixture.Backend.ValidBars = true;
++        Assert.Equal(MaaJobStatus.Succeeded, outer.Screencap().Wait());
++        fixture.Backend.CaptureFails = true;
++        Assert.Equal(MaaJobStatus.Failed, outer.Screencap().Wait());
++        Assert.Equal(MaaJobStatus.Failed, outer.TouchMove(0, 20, 20).Wait());
++    }
++
++    [Fact]
++    public void UnwrappedControllerKeepsOriginalImageAndWrapperOwnsBackend()
++    {
++        var backend = new FakeController();
++        using (var original = new MaaCustomController(backend))
++        {
++            Assert.True(original.SetOption_ScreenshotTargetShortSide(720));
++            Assert.Equal(MaaJobStatus.Succeeded, original.Screencap().Wait());
++            using var image = new MaaImageBuffer();
++            Assert.True(original.GetCachedImage(image));
++            Assert.Equal((1152, 720), (image.Width, image.Height));
++        }
++        var fixture = new Fixture();
++        fixture.Dispose();
++        Assert.Equal(1, fixture.Backend.DisposeCount);
++    }
++
++    internal static byte[] Image(int width, int height)
++    {
++        var pixels = new byte[width * height * 3];
++        var contentHeight = Math.Min(height, width / 16 * 9);
++        var top = (height - contentHeight) / 2;
++        for (var y = top; y < top + contentHeight; y++)
++        for (var x = 0; x < width; x++)
++        {
++            var offset = (y * width + x) * 3;
++            pixels[offset] = 31; pixels[offset + 1] = 71; pixels[offset + 2] = 109;
++        }
++        return pixels;
++    }
++
++    private sealed class Fixture : IDisposable
++    {
++        public readonly FakeController Backend = new();
++        public (int Width, int Height) Size = (2560, 1600);
++        public readonly MaaCustomController Outer;
++        public Fixture()
++        {
++            var inner = new MaaCustomController(Backend, LinkOption.None);
++            Outer = new MaaCustomController(new LetterboxController(inner, () => Size));
++            Assert.True(Outer.SetOption_ScreenshotTargetShortSide(720));
++        }
++        public void Dispose() => Outer.Dispose();
++    }
++
++    private sealed class FakeController : IMaaCustomController
++    {
++        public string Name { get; set; } = "SyntheticLetterbox";
++        public int Width = 2560, Height = 1600;
++        public bool ValidBars = true, CaptureFails, WasInactive;
++        public int DisposeCount;
++        public List<(int, int)> Points = [];
++        public (int, int) ScrollDelta, RelativeDelta;
++        public string Text = "";
++        public bool Connect() => true;
++        public bool Connected() => true;
++        public bool RequestUuid(IMaaStringBuffer buffer) => buffer.TrySetValue("synthetic");
++        public ControllerFeatures GetFeatures() => ControllerFeatures.UseMouseDownAndUpInsteadOfClick
++            | ControllerFeatures.UseKeyboardDownAndUpInsteadOfClick;
++        public bool StartApp(string intent) => true;
++        public bool StopApp(string intent) => true;
++        public unsafe bool Screencap(IMaaImageBuffer buffer)
++        {
++            if (CaptureFails) return false;
++            var bytes = Image(Width, Height);
++            if (!ValidBars) Array.Fill(bytes, (byte)100);
++            fixed (byte* pointer = bytes)
++                return ((MaaImageBuffer)buffer).TrySetRawData((nint)pointer, Width, Height, 16);
++        }
++        public bool Click(int x, int y) { Points.Add((x, y)); return true; }
++        public bool Swipe(int x1, int y1, int x2, int y2, int duration) => Click(x1, y1) && Click(x2, y2);
++        public bool TouchDown(int contact, int x, int y, int pressure) => Click(x, y);
++        public bool TouchMove(int contact, int x, int y, int pressure) => Click(x, y);
++        public bool TouchUp(int contact) => true;
++        public bool ClickKey(int keycode) => true;
++        public bool InputText(string text) { Text = text; return true; }
++        public bool KeyDown(int keycode) => true;
++        public bool KeyUp(int keycode) => true;
++        public bool Scroll(int dx, int dy) { ScrollDelta = (dx, dy); return true; }
++        public bool RelativeMove(int dx, int dy) { RelativeDelta = (dx, dy); return true; }
++        public bool Shell(string cmd, long millisecondsTimeout, IMaaStringBuffer buffer) => buffer.TrySetValue("output");
++        public bool Inactive() { WasInactive = true; return true; }
++        public bool GetInfo(IMaaStringBuffer buffer) => buffer.TrySetValue("{\"type\":\"custom\"}");
++        public void Dispose() => DisposeCount++;
++    }
++}
+diff --git a/MFAAvalonia.Letterbox.Tests/MFAAvalonia.Letterbox.Tests.csproj b/MFAAvalonia.Letterbox.Tests/MFAAvalonia.Letterbox.Tests.csproj
+new file mode 100644
+index 0000000..2c71ce9
+--- /dev/null
++++ b/MFAAvalonia.Letterbox.Tests/MFAAvalonia.Letterbox.Tests.csproj
+@@ -0,0 +1,21 @@
++<Project Sdk="Microsoft.NET.Sdk">
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
++    <MaaFrameworkPlatform>win-x64</MaaFrameworkPlatform>
++    <IsPackable>false</IsPackable>
++    <IsTestProject>true</IsTestProject>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
++    <MaaRuntimeVersion Condition="'$(MaaRuntimeVersion)' == ''">5.12.3</MaaRuntimeVersion>
++  </PropertyGroup>
++  <ItemGroup>
++    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
++    <PackageReference Include="xunit.v3" Version="3.0.1" />
++    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.1" />
++    <PackageReference Include="Maa.Framework" Version="5.10.0" />
++    <PackageReference Include="Maa.Framework.Runtimes" Version="$(MaaRuntimeVersion)" />
++    <Compile Include="../MFAAvalonia/Extensions/MaaFW/Controllers/*.cs" Link="Controllers/%(Filename)%(Extension)" />
++  </ItemGroup>
++</Project>
+diff --git a/MFAAvalonia/Assets/Localization/Strings.en-US.resx b/MFAAvalonia/Assets/Localization/Strings.en-US.resx
+index e0c1000..dcb1e95 100644
+--- a/MFAAvalonia/Assets/Localization/Strings.en-US.resx
++++ b/MFAAvalonia/Assets/Localization/Strings.en-US.resx
+@@ -2243,6 +2243,8 @@ Update using this archive?</value>
+   <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>Background · Virtual display</value></data>
+   <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>Foreground · Current screen</value></data>
+   <data name="CurrentScreen" xml:space="preserve"><value>Current screen</value></data>
++  <data name="Win32CropLetterbox" xml:space="preserve"><value>Crop top and bottom bars to fit the standard aspect ratio</value></data>
++  <data name="Win32CropLetterboxDescription" xml:space="preserve"><value>For screens with top and bottom black bars (for example, 16:10). Reconnect after changing for this setting to take effect.</value></data>
+ </root>
+ 
+ 
+diff --git a/MFAAvalonia/Assets/Localization/Strings.ja-JP.resx b/MFAAvalonia/Assets/Localization/Strings.ja-JP.resx
+index 26e28fa..e15200f 100644
+--- a/MFAAvalonia/Assets/Localization/Strings.ja-JP.resx
++++ b/MFAAvalonia/Assets/Localization/Strings.ja-JP.resx
+@@ -2238,4 +2238,6 @@
+   <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>バックグラウンド · 仮想ディスプレイ</value></data>
+   <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>フォアグラウンド · 現在の画面</value></data>
+   <data name="CurrentScreen" xml:space="preserve"><value>現在の画面</value></data>
++  <data name="Win32CropLetterbox" xml:space="preserve"><value>上下の黒帯を除去して標準の画面比率に合わせる</value></data>
++  <data name="Win32CropLetterboxDescription" xml:space="preserve"><value>上下に黒帯がある画面（例：16:10）向けです。変更を反映するには再接続が必要です。</value></data>
+ </root>
+diff --git a/MFAAvalonia/Assets/Localization/Strings.resx b/MFAAvalonia/Assets/Localization/Strings.resx
+index cd252e0..4762200 100644
+--- a/MFAAvalonia/Assets/Localization/Strings.resx
++++ b/MFAAvalonia/Assets/Localization/Strings.resx
+@@ -2253,6 +2253,8 @@
+   <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>后台模式 · 虚拟屏</value></data>
+   <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>前台模式 · 当前屏</value></data>
+   <data name="CurrentScreen" xml:space="preserve"><value>当前屏幕</value></data>
++  <data name="Win32CropLetterbox" xml:space="preserve"><value>剪裁上下黑边以适配标准比例</value></data>
++  <data name="Win32CropLetterboxDescription" xml:space="preserve"><value>适用于存在上下黑边的屏幕(例如16:10)。切换后需要重新连接才生效</value></data>
+ </root>
+ 
+ 
+diff --git a/MFAAvalonia/Assets/Localization/Strings.zh-Hant.resx b/MFAAvalonia/Assets/Localization/Strings.zh-Hant.resx
+index aba7179..bff5356 100644
+--- a/MFAAvalonia/Assets/Localization/Strings.zh-Hant.resx
++++ b/MFAAvalonia/Assets/Localization/Strings.zh-Hant.resx
+@@ -2231,6 +2231,8 @@
+   <data name="AndroidVirtualDisplayMode" xml:space="preserve"><value>背景模式 · 虛擬螢幕</value></data>
+   <data name="AndroidCurrentScreenMode" xml:space="preserve"><value>前景模式 · 目前螢幕</value></data>
+   <data name="CurrentScreen" xml:space="preserve"><value>目前螢幕</value></data>
++  <data name="Win32CropLetterbox" xml:space="preserve"><value>剪裁上下黑邊以適配標準比例</value></data>
++  <data name="Win32CropLetterboxDescription" xml:space="preserve"><value>適用於存在上下黑邊的螢幕(例如16:10)。切換後需要重新連線才生效</value></data>
+ </root>
+ 
+ 
+diff --git a/MFAAvalonia/Configuration/ConfigurationKeys.cs b/MFAAvalonia/Configuration/ConfigurationKeys.cs
+index adb682a..85bbc9a 100644
+--- a/MFAAvalonia/Configuration/ConfigurationKeys.cs
++++ b/MFAAvalonia/Configuration/ConfigurationKeys.cs
+@@ -71,6 +71,7 @@ public static class ConfigurationKeys
+     public const string AdbControlScreenCapType = "AdbControlScreenCapType";
+     public const string AdbControlInputType = "AdbControlInputType";
+     public const string Win32ControlScreenCapType = "Win32ControlScreenCapType";
++    public const string Win32CropLetterbox = "Win32CropLetterbox";
+     public const string Win32ControlMouseType = "Win32ControlMouseType";
+     public const string Win32ControlKeyboardType = "Win32ControlKeyboardType";
+     public const string MacOSControlScreenCapType = "MacOSControlScreenCapType";
+@@ -232,6 +233,7 @@ public static class ConfigurationKeys
+         AdbControlScreenCapType,
+         AdbControlInputType,
+         Win32ControlScreenCapType,
++        Win32CropLetterbox,
+         Win32ControlMouseType,
+         Win32ControlKeyboardType,
+         MacOSControlScreenCapType,
+diff --git a/MFAAvalonia/Extensions/MaaFW/Controllers/LetterboxController.cs b/MFAAvalonia/Extensions/MaaFW/Controllers/LetterboxController.cs
+new file mode 100644
+index 0000000..523ddb7
+--- /dev/null
++++ b/MFAAvalonia/Extensions/MaaFW/Controllers/LetterboxController.cs
+@@ -0,0 +1,177 @@
++using System;
++using System.Runtime.InteropServices;
++using MaaFramework.Binding;
++using MaaFramework.Binding.Buffers;
++using MaaFramework.Binding.Custom;
++
++namespace MFAAvalonia.Extensions.MaaFW.Controllers;
++
++/// <summary>
++/// Uses the public custom-controller API. The inner controller keeps raw dimensions;
++/// only the outer controller applies the project's normal screenshot scaling.
++/// </summary>
++internal sealed class LetterboxController : IMaaCustomController
++{
++    private readonly MaaController _inner;
++    private readonly Func<(int Width, int Height)> _clientSize;
++    private readonly Action<string>? _report;
++    private readonly object _gate = new();
++    private LetterboxViewport? _viewport;
++    private string? _lastState;
++    private bool _disposed;
++
++    public string Name { get; set; } = "Win32Letterbox16By9";
++
++    // Takes ownership of inner, including on initialization failure.
++    internal LetterboxController(MaaController inner, Func<(int Width, int Height)> clientSize,
++        Action<string>? report = null)
++    {
++        _inner = inner;
++        _clientSize = clientSize;
++        _report = report;
++        try
++        {
++            if (!inner.SetOption_ScreenshotUseRawSize(true))
++                throw new InvalidOperationException("Letterbox input requires an unscaled inner controller.");
++        }
++        catch
++        {
++            inner.Dispose();
++            throw;
++        }
++    }
++
++    internal static MaaController CreateWin32(nint hwnd, Win32ScreencapMethods screencap,
++        Win32InputMethod mouse, Win32InputMethod keyboard, LinkOption link, CheckStatusOption check,
++        Action<string>? report = null)
++    {
++        var inner = new MaaWin32Controller(hwnd, screencap, mouse, keyboard, LinkOption.None);
++        var api = new LetterboxController(inner, () => GetClientSize(hwnd), report);
++        MaaCustomController? outer = null;
++        try
++        {
++            outer = new MaaCustomController(api, LinkOption.None);
++            if (link == LinkOption.Start && outer.LinkStart().Wait() != MaaJobStatus.Succeeded
++                && check == CheckStatusOption.ThrowIfNotSucceeded)
++                throw new InvalidOperationException("Failed to connect the letterbox controller.");
++            return outer;
++        }
++        catch
++        {
++            if (outer != null) outer.Dispose();
++            else api.Dispose();
++            throw;
++        }
++    }
++
++    // Native callbacks must not let managed exceptions cross the ABI boundary.
++    private bool Guard(Func<bool> operation)
++    {
++        lock (_gate)
++        {
++            if (_disposed) return false;
++            try { return operation(); }
++            catch (Exception exception)
++            {
++                _viewport = null;
++                ReportState($"Letterbox controller: {exception.Message}");
++                return false;
++            }
++        }
++    }
++
++    private void ReportState(string state)
++    {
++        if (_lastState == state) return;
++        _lastState = state;
++        try { _report?.Invoke(state); }
++        catch { /* Logging must not fail a native callback. */ }
++    }
++
++    private static bool Succeeded(MaaJob job) => job.Wait() == MaaJobStatus.Succeeded;
++    public bool Connect() => Guard(() => { _viewport = null; return Succeeded(_inner.LinkStart()); });
++    public bool Connected() => Guard(() => _inner.IsConnected);
++    public bool RequestUuid(IMaaStringBuffer buffer) => Guard(() => buffer.TrySetValue(_inner.Uuid ?? string.Empty));
++    public ControllerFeatures GetFeatures() => ControllerFeatures.UseMouseDownAndUpInsteadOfClick
++        | ControllerFeatures.UseKeyboardDownAndUpInsteadOfClick;
++    public bool StartApp(string intent) => Guard(() => Succeeded(_inner.StartApp(intent)));
++    public bool StopApp(string intent) => Guard(() => Succeeded(_inner.StopApp(intent)));
++
++    public bool Screencap(IMaaImageBuffer buffer) => Guard(() => Capture(buffer));
++
++    private unsafe bool Capture(IMaaImageBuffer buffer)
++    {
++        _viewport = null;
++        buffer.TryClear();
++        using var source = new MaaImageBuffer();
++        if (!Succeeded(_inner.Screencap()) || !_inner.GetCachedImage(source)
++            || !source.TryGetRawData(out var data, out var width, out var height, out var type)
++            || type is not (16 or 24) || buffer is not MaaImageBuffer output)
++            return false; // CV_8UC3 / CV_8UC4, tightly packed MaaImageBuffer data.
++
++        var pixels = new ReadOnlySpan<byte>((void*)data, checked(width * height * source.Channels));
++        if (!LetterboxViewport.TryCreate(pixels, width, height, source.Channels, out var viewport))
++        {
++            ReportState($"Letterbox crop rejected ({width}x{height}): expected centered 16:9 content with black top/bottom bars.");
++            return false;
++        }
++        if (_clientSize() != (width, height)) return false;
++        // Full-width row slices remain contiguous. MaaImageBuffer copies the data.
++        if (!output.TrySetRawData(data + checked(viewport.Top * width * source.Channels),
++                width, viewport.Height, type))
++            return false;
++        _viewport = viewport;
++        ReportState($"Letterbox: {width}x{height} -> {width}x{viewport.Height}, top={viewport.Top}");
++        return true;
++    }
++
++    private bool TryMap(ref int x, ref int y) => _viewport is { } viewport
++        && _clientSize() == (viewport.SourceWidth, viewport.SourceHeight)
++        && viewport.TryMap(ref x, ref y);
++
++    public bool Click(int x, int y) => Guard(() => TryMap(ref x, ref y) && Succeeded(_inner.Click(x, y)));
++    public bool Swipe(int x1, int y1, int x2, int y2, int duration) => Guard(() =>
++        TryMap(ref x1, ref y1) && TryMap(ref x2, ref y2) && Succeeded(_inner.Swipe(x1, y1, x2, y2, duration)));
++    public bool TouchDown(int contact, int x, int y, int pressure) => Guard(() =>
++        TryMap(ref x, ref y) && Succeeded(_inner.TouchDown(contact, x, y, pressure)));
++    public bool TouchMove(int contact, int x, int y, int pressure) => Guard(() =>
++        TryMap(ref x, ref y) && Succeeded(_inner.TouchMove(contact, x, y, pressure)));
++    // Release is allowed even after resize or capture failure.
++    public bool TouchUp(int contact) => Guard(() => Succeeded(_inner.TouchUp(contact)));
++    public bool ClickKey(int keycode) => Guard(() => Succeeded(_inner.ClickKey(keycode)));
++    public bool KeyDown(int keycode) => Guard(() => Succeeded(_inner.KeyDown(keycode)));
++    public bool KeyUp(int keycode) => Guard(() => Succeeded(_inner.KeyUp(keycode)));
++    public bool InputText(string text) => Guard(() => Succeeded(_inner.InputText(text)));
++    public bool Scroll(int dx, int dy) => Guard(() => Succeeded(_inner.Scroll(dx, dy)));
++    public bool RelativeMove(int dx, int dy) => Guard(() => Succeeded(_inner.RelativeMove(dx, dy)));
++    public bool Inactive() => Guard(() => Succeeded(_inner.Inactive()));
++    public bool Shell(string cmd, long millisecondsTimeout, IMaaStringBuffer buffer) => Guard(() =>
++        Succeeded(_inner.Shell(cmd, millisecondsTimeout)) && _inner.GetShellOutput(out var result) && buffer.TrySetValue(result));
++    public bool GetInfo(IMaaStringBuffer buffer) => Guard(() => buffer.TrySetValue(_inner.Info ?? "{}"));
++
++    public void Dispose()
++    {
++        lock (_gate)
++        {
++            if (_disposed) return;
++            _disposed = true;
++            _viewport = null;
++            _inner.Dispose();
++        }
++    }
++
++    private static (int, int) GetClientSize(nint hwnd)
++    {
++        var previous = SetThreadDpiAwarenessContext(new nint(-4)); // PER_MONITOR_AWARE_V2
++        try { return GetClientRect(hwnd, out var rect) ? (rect.Right - rect.Left, rect.Bottom - rect.Top) : (0, 0); }
++        finally { if (previous != 0) SetThreadDpiAwarenessContext(previous); }
++    }
++
++    [StructLayout(LayoutKind.Sequential)]
++    private struct Rect { public int Left, Top, Right, Bottom; }
++    [DllImport("user32.dll")]
++    [return: MarshalAs(UnmanagedType.Bool)]
++    private static extern bool GetClientRect(nint hwnd, out Rect rect);
++    [DllImport("user32.dll")]
++    private static extern nint SetThreadDpiAwarenessContext(nint context);
++}
+diff --git a/MFAAvalonia/Extensions/MaaFW/Controllers/LetterboxViewport.cs b/MFAAvalonia/Extensions/MaaFW/Controllers/LetterboxViewport.cs
+new file mode 100644
+index 0000000..2979b91
+--- /dev/null
++++ b/MFAAvalonia/Extensions/MaaFW/Controllers/LetterboxViewport.cs
+@@ -0,0 +1,62 @@
++using System;
++
++namespace MFAAvalonia.Extensions.MaaFW.Controllers;
++
++/// <summary>A content rectangle in an unscaled client-area screenshot.</summary>
++internal readonly record struct LetterboxViewport(int SourceWidth, int SourceHeight, int Top, int Height)
++{
++    public bool TryMap(ref int x, ref int y)
++    {
++        // Maa uses -1 to leave an axis unchanged.
++        if (x < -1 || y < -1 || x >= SourceWidth || y >= Height)
++            return false;
++        if (y >= 0)
++            y += Top;
++        return true;
++    }
++
++    public static bool TryCreate(ReadOnlySpan<byte> pixels, int width, int height, int channels,
++        out LetterboxViewport viewport)
++    {
++        viewport = default;
++        if (width <= 0 || height <= 0 || channels is not (3 or 4)
++            || (long)width * height * channels > pixels.Length)
++            return false;
++
++        // Existing 16:9 (or wider) screenshots pass through. This option only removes
++        // horizontal letterbox bars, never guesses an arbitrary dark content rectangle.
++        if ((long)width * 9 >= (long)height * 16)
++        {
++            viewport = new(width, height, 0, height);
++            return true;
++        }
++
++        if (width % 16 != 0)
++            return false;
++        var contentHeight = width / 16 * 9;
++        var difference = height - contentHeight;
++        if (difference % 2 != 0)
++            return false;
++        var top = difference / 2;
++        if (!IsBlackBand(pixels, width, channels, 0, top)
++            || !IsBlackBand(pixels, width, channels, top + contentHeight, height))
++            return false;
++
++        viewport = new(width, height, top, contentHeight);
++        return true;
++    }
++
++    private static bool IsBlackBand(ReadOnlySpan<byte> pixels, int width, int channels, int start, int end)
++    {
++        long dark = 0, total = 0;
++        for (var y = start; y < end; y += 4)
++        for (var x = 0; x < width; x += 4)
++        {
++            var offset = (y * width + x) * channels;
++            if (pixels[offset] <= 16 && pixels[offset + 1] <= 16 && pixels[offset + 2] <= 16)
++                dark++;
++            total++;
++        }
++        return total > 0 && dark * 1000 >= total * 995;
++    }
++}
+diff --git a/MFAAvalonia/Extensions/MaaFW/MaaProcessor.cs b/MFAAvalonia/Extensions/MaaFW/MaaProcessor.cs
+index 5196629..7997212 100644
+--- a/MFAAvalonia/Extensions/MaaFW/MaaProcessor.cs
++++ b/MFAAvalonia/Extensions/MaaFW/MaaProcessor.cs
+@@ -2379,6 +2379,14 @@ public class MaaProcessor
+                     LoggerHelper.Info($"检查方式：{Config.DesktopWindow.Check}");
+                 }
+ 
++                if (controllerType == MaaControllerTypes.Win32
++                    && InstanceConfiguration.GetValue(ConfigurationKeys.Win32CropLetterbox, false))
++                    return Controllers.LetterboxController.CreateWin32(
++                        Config.DesktopWindow.HWnd,
++                        Config.DesktopWindow.ScreenCap, Config.DesktopWindow.Mouse, Config.DesktopWindow.KeyBoard,
++                        Config.DesktopWindow.Link, Config.DesktopWindow.Check,
++                        message => LoggerHelper.Info(message));
++
+                 return new MaaWin32Controller(
+                     Config.DesktopWindow.HWnd,
+                     Config.DesktopWindow.ScreenCap, Config.DesktopWindow.Mouse, Config.DesktopWindow.KeyBoard,
+diff --git a/MFAAvalonia/Helper/Instances.cs b/MFAAvalonia/Helper/Instances.cs
+index 400eafd..df79635 100644
+--- a/MFAAvalonia/Helper/Instances.cs
++++ b/MFAAvalonia/Helper/Instances.cs
+@@ -572,6 +572,7 @@ public static partial class Instances
+                         default(MaaFramework.Binding.GamepadType), new Converters.UniversalEnumConverter<MaaFramework.Binding.GamepadType>());
+                     connect.RetryOnDisconnected = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RetryOnDisconnected, false);
+                     connect.RetryOnDisconnectedWin32 = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RetryOnDisconnectedWin32, false);
++                    connect.Win32CropLetterbox = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32CropLetterbox, false);
+                     connect.AllowAdbRestart = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AllowAdbRestart, true);
+                     connect.AllowAdbHardRestart = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AllowAdbHardRestart, true);
+                     connect.AutoDetectOnConnectionFailed = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AutoDetectOnConnectionFailed, true);
+diff --git a/MFAAvalonia/Helper/LangKeys.cs b/MFAAvalonia/Helper/LangKeys.cs
+index 95a33c3..8bfbe8b 100644
+--- a/MFAAvalonia/Helper/LangKeys.cs
++++ b/MFAAvalonia/Helper/LangKeys.cs
+@@ -10,6 +10,8 @@ namespace MFAAvalonia.Helper;
+ 
+ public static class LangKeys
+ {
++	public static readonly string Win32CropLetterbox = "Win32CropLetterbox";
++	public static readonly string Win32CropLetterboxDescription = "Win32CropLetterboxDescription";
+ 	public static readonly string About = "About";
+ 	public static readonly string AdbCaptureMode = "AdbCaptureMode";
+ 	public static readonly string AdbConfig = "AdbConfig";
+diff --git a/MFAAvalonia/ViewModels/Other/InstanceTabBarViewModel.cs b/MFAAvalonia/ViewModels/Other/InstanceTabBarViewModel.cs
+index ba893f5..27efd42 100644
+--- a/MFAAvalonia/ViewModels/Other/InstanceTabBarViewModel.cs
++++ b/MFAAvalonia/ViewModels/Other/InstanceTabBarViewModel.cs
+@@ -470,6 +470,7 @@ public partial class InstanceTabBarViewModel : ViewModelBase
+                 new MFAAvalonia.Helper.Converters.UniversalEnumConverter<MaaFramework.Binding.GamepadType>());
+             connect.RetryOnDisconnected = config.GetValue(MFAAvalonia.Configuration.ConfigurationKeys.RetryOnDisconnected, false);
+             connect.RetryOnDisconnectedWin32 = config.GetValue(MFAAvalonia.Configuration.ConfigurationKeys.RetryOnDisconnectedWin32, false);
++            connect.Win32CropLetterbox = config.GetValue(MFAAvalonia.Configuration.ConfigurationKeys.Win32CropLetterbox, false);
+             connect.AllowAdbRestart = config.GetValue(MFAAvalonia.Configuration.ConfigurationKeys.AllowAdbRestart, true);
+             connect.AllowAdbHardRestart = config.GetValue(MFAAvalonia.Configuration.ConfigurationKeys.AllowAdbHardRestart, true);
+             connect.AutoDetectOnConnectionFailed = config.GetValue(MFAAvalonia.Configuration.ConfigurationKeys.AutoDetectOnConnectionFailed, true);
+diff --git a/MFAAvalonia/ViewModels/UsersControls/Settings/ConnectSettingsUserControlModel.cs b/MFAAvalonia/ViewModels/UsersControls/Settings/ConnectSettingsUserControlModel.cs
+index 3c678cf..73581ae 100644
+--- a/MFAAvalonia/ViewModels/UsersControls/Settings/ConnectSettingsUserControlModel.cs
++++ b/MFAAvalonia/ViewModels/UsersControls/Settings/ConnectSettingsUserControlModel.cs
+@@ -32,6 +32,7 @@ public partial class ConnectSettingsUserControlModel : ViewModelBase
+             CurrentControllerType = config.GetValue(ConfigurationKeys.CurrentController,
+                 MaaControllerTypes.Adb, MaaControllerTypes.None, new UniversalEnumConverter<MaaControllerTypes>());
+             RememberAdb = config.GetValue(ConfigurationKeys.RememberAdb, true);
++            Win32CropLetterbox = config.GetValue(ConfigurationKeys.Win32CropLetterbox, false);
+             UseFingerprintMatching = config.GetValue(ConfigurationKeys.UseFingerprintMatching, true);
+             AdbControlScreenCapType = config.GetValue(ConfigurationKeys.AdbControlScreenCapType,
+                 AdbScreencapMethods.None, [AdbScreencapMethods.All, AdbScreencapMethods.Default],
+@@ -206,6 +207,16 @@ public partial class ConnectSettingsUserControlModel : ViewModelBase
+         HandlePropertyChanged(ConfigurationKeys.AdbControlInputType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+     }
+ 
++    [ObservableProperty] private bool _win32CropLetterbox =
++        ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32CropLetterbox, false);
++
++    partial void OnWin32CropLetterboxChanged(bool value)
++    {
++        if (IsSyncing) return;
++        HandlePropertyChanged(ConfigurationKeys.Win32CropLetterbox, value,
++            () => MaaProcessorManager.Instance.Current.SetTasker());
++    }
++
+     partial void OnWin32ControlScreenCapTypeChanged(Win32ScreencapMethods value)
+     {
+         if (IsSyncing) return;
+diff --git a/MFAAvalonia/Views/UserControls/Settings/ConnectSettingsUserControl.axaml b/MFAAvalonia/Views/UserControls/Settings/ConnectSettingsUserControl.axaml
+index 63cd12b..913af8d 100644
+--- a/MFAAvalonia/Views/UserControls/Settings/ConnectSettingsUserControl.axaml
++++ b/MFAAvalonia/Views/UserControls/Settings/ConnectSettingsUserControl.axaml
+@@ -267,6 +267,24 @@
+                             VerticalAlignment="Center" />
+                     </StackPanel>
+                 </DockPanel>
++                <DockPanel>
++                    <ToggleSwitch
++                        Classes="Switch"
++                        DockPanel.Dock="Right"
++                        IsChecked="{Binding Win32CropLetterbox}"
++                        IsEnabled="{Binding Idle, Source={x:Static helper:Instances.RootViewModel}}"
++                        VerticalAlignment="Top" />
++                    <StackPanel VerticalAlignment="Center" MaxWidth="480" Spacing="4">
++                        <TextBlock
++                            FontSize="16"
++                            FontWeight="SemiBold"
++                            Text="{markup:I18n {x:Static helper:LangKeys.Win32CropLetterbox}}" />
++                        <TextBlock
++                            TextWrapping="Wrap"
++                            Opacity="0.7"
++                            Text="{markup:I18n {x:Static helper:LangKeys.Win32CropLetterboxDescription}}" />
++                    </StackPanel>
++                </DockPanel>
+                 <DockPanel>
+                     <ToggleSwitch
+                         Classes="Switch"
+diff --git a/docs/en/win32-letterbox.md b/docs/en/win32-letterbox.md
+new file mode 100644
+index 0000000..8b2ffe9
+--- /dev/null
++++ b/docs/en/win32-letterbox.md
+@@ -0,0 +1,11 @@
++# Win32 letterbox cropping
++
++Enable **Crop top and bottom bars to fit the standard aspect ratio** in Settings → Connection settings. It defaults to off, is saved per instance, and is disabled while tasks run. Reconnect after changing.
++
++The controller removes symmetric top/bottom bars before normal scaling and adds the crop offset back to input coordinates. Dimensions are calculated: 2560×1600 → 2560×1440 (80 pixels per bar), 1920×1200 → 1920×1080 (60), and 1280×800 → 1280×720 (40).
++
++16:9 or wider captures pass through. Taller captures require width divisible by 16 and equal integer bars. Each band is sampled every four pixels; 99.5% of samples must have RGB channels at most 16. Invalid captures or client-size changes block positional input until a valid capture; releases remain available. Side bars and layouts that change with aspect ratio are unsupported.
++
++Uses the public custom-controller API around the original Win32 controller; no native DLL changes. The inner controller uses raw dimensions and the outer controller applies normal scaling. Win32-specific options absent from the custom API are unsupported.
++
++All 11 tests pass with native 5.12.3 and 5.14.2. A MaaKes user confirmed the coffee task at 2560×1600; other dimensions have synthetic coverage only. Test project: `MFAAvalonia.Letterbox.Tests`.
+diff --git "a/docs/zh/\347\252\227\345\217\243\351\273\221\350\276\271\350\243\201\345\211\252.md" "b/docs/zh/\347\252\227\345\217\243\351\273\221\350\276\271\350\243\201\345\211\252.md"
+new file mode 100644
+index 0000000..3609f18
+--- /dev/null
++++ "b/docs/zh/\347\252\227\345\217\243\351\273\221\350\276\271\350\243\201\345\211\252.md"
+@@ -0,0 +1,17 @@
++# Win32 上下黑边裁剪
++
++设置 → 连接设置 →“剪裁上下黑边以适配标准比例”。默认关闭，按实例保存，任务运行时不能切换；切换后重新连接生效。
++
++根据截图宽度计算居中的 16:9 区域，裁掉上下黑边后沿用项目原有缩放，并给输入坐标补回偏移。无需改任务模板。
++
++| 截图尺寸 | 裁剪后 | 上下各裁掉 |
++| --- | --- | --- |
++| 2560×1600 | 2560×1440 | 80 像素 |
++| 1920×1200 | 1920×1080 | 60 像素 |
++| 1280×800 | 1280×720 | 40 像素 |
++
++16:9 及更宽画面原样传递。较高画面要求宽度能被 16 整除、黑边对称；每隔 4 像素采样，两个黑边各至少 99.5% 的采样点 RGB 不大于 16。校验失败或客户区尺寸变化时阻止位置输入，取得有效截图后恢复；释放操作仍可执行。不处理左右黑边或布局随比例变化的游戏。
++
++实现通过公开 CustomController API 包装原 Win32 控制器，不改原生 DLL。内部使用原始尺寸，外部执行原有缩放。自定义控制器 API 未暴露的 Win32 专属选项不在支持范围。
++
++11 项合成及 native 接口测试在 5.12.3 / 5.14.2 上通过；2560×1600 经 MaaKes 用户实测“喝咖啡”成功，其他尺寸尚未逐一实测。测试项目：`MFAAvalonia.Letterbox.Tests`。

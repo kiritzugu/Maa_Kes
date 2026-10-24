@@ -5,6 +5,7 @@ env:
   # - 设置 VERSION 为空字符串时，下载 latest 版本
   # - 设置 VERSION 为具体版本号时（如 v1.2.3），下载指定版本
   MAAFW_VERSION: ""
+  # Windows GUI 由 windows-gui.yml 固定源码版本并应用本仓库补丁。
   MFAA_VERSION: ""
   # Android 包在 MirrorChyan 后台的 rid（桌面端仍是 interface.json 里的 MaaKes，不动）。
   # 这个值会在打包时写进 APK 内的 interface.json，客户端更新检查读的就是它；
@@ -20,6 +21,8 @@ on:
     paths:
       - ".github/workflows/install.yml"
       - ".github/android/**"
+      - ".github/windows/**"
+      - ".github/workflows/windows-gui.yml"
       - "tools/ci/**"
       - "assets/**"
       - "**.py"
@@ -29,6 +32,8 @@ on:
     paths:
       - ".github/workflows/install.yml"
       - ".github/android/**"
+      - ".github/windows/**"
+      - ".github/workflows/windows-gui.yml"
       - "tools/ci/**"
       - "assets/**"
       - "**.py"
@@ -75,8 +80,11 @@ jobs:
       is_release: ${{ steps.set_tag.outputs.is_release }}
       is_prerelease: ${{ steps.set_tag.outputs.is_prerelease }}
 
+  windows_gui:
+    uses: ./.github/workflows/windows-gui.yml
+
   install:
-    needs: meta
+    needs: [meta, windows_gui]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -100,7 +108,7 @@ jobs:
           extract: true
 
       - name: Download MFAAvalonia
-        if: matrix.os != 'android'
+        if: matrix.os != 'android' && matrix.os != 'win'
         id: download_mfa
         uses: robinraju/release-downloader@v1
         with:
@@ -112,12 +120,19 @@ jobs:
           extract: true
 
       - name: Clean up MFAAvalonia archive
-        if: matrix.os != 'android'
+        if: matrix.os != 'android' && matrix.os != 'win'
         shell: bash
         run: |
           ARCHIVE_FILE_PATH="${{ fromJson(steps.download_mfa.outputs.downloaded_files)[0] }}"
           rm -f "${ARCHIVE_FILE_PATH}"
           echo "Archive cleanup command executed for MFAAvalonia."
+
+      - name: Download patched Windows GUI
+        if: matrix.os == 'win'
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-gui-${{ matrix.arch == 'x86_64' && 'x64' || 'arm64' }}
+          path: MFA
 
       - name: Remove built-in runtime in MFA
         if: matrix.os != 'android'
@@ -362,6 +377,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          pattern: MaaKes-*
           path: assets
 
       # 只压缩构建产物目录，跳过 MaaCommonAssets 等无关文件；
