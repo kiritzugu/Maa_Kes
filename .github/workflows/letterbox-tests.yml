@@ -3,11 +3,17 @@ on:
   push:
     paths:
       - assets/resource/custom/**
+      - assets/resource/pipeline/黑边适配.json
+      - assets/tasks/黑边适配.json
+      - assets/interface.json
       - tests/Letterbox.Tests/**
       - .github/workflows/letterbox-tests.yml
   pull_request:
     paths:
       - assets/resource/custom/**
+      - assets/resource/pipeline/黑边适配.json
+      - assets/tasks/黑边适配.json
+      - assets/interface.json
       - tests/Letterbox.Tests/**
       - .github/workflows/letterbox-tests.yml
 jobs:

@@ -15,9 +15,15 @@ public partial class LetterboxTests
     [InlineData(1280, 720, 0, 720)]
     [InlineData(2560, 1440, 0, 1440)]
     [InlineData(1920, 1080, 0, 1080)]
+    [InlineData(1366, 854, 43, 768)]
+    [InlineData(1366, 855, 43, 768)]
+    [InlineData(1366, 855, 44, 768)]
+    [InlineData(2560, 1601, 80, 1440)]
+    [InlineData(2560, 1601, 81, 1440)]
+    [InlineData(1366, 768, 0, 768)]
     public void ContentRectangleAndBounds(int width, int height, int top, int contentHeight)
     {
-        var pixels = Image(width, height);
+        var pixels = Image(width, height, contentHeight, top);
         Assert.True(LetterboxViewport.TryCreate(pixels, width, height, 3, out var view));
         Assert.Equal(new LetterboxViewport(width, height, top, contentHeight), view);
         int x = width - 1, y = contentHeight - 1;
@@ -48,6 +54,20 @@ public partial class LetterboxTests
         Assert.False(LetterboxViewport.TryCreate(pixels, 2560, 1601, 3, out _));
     }
 
+    [Theory]
+    [InlineData(854, 43)]
+    [InlineData(855, 44)]
+    public void RoundedGeometryStillRequiresBothBlackBands(int height, int top)
+    {
+        var pixels = Image(1366, height, 768, top);
+        Array.Fill(pixels, (byte)255, 0, top * 1366 * 3);
+        Assert.False(LetterboxViewport.TryCreate(pixels, 1366, height, 3, out _));
+        pixels = Image(1366, height, 768, top);
+        var bottom = (top + 768) * 1366 * 3;
+        Array.Fill(pixels, (byte)255, bottom, pixels.Length - bottom);
+        Assert.False(LetterboxViewport.TryCreate(pixels, 1366, height, 3, out _));
+    }
+
     [Fact]
     public void ToleratesSmallOverlayAndIgnoresAlpha()
     {
@@ -72,6 +92,7 @@ public partial class LetterboxTests
         Assert.Equal((1280, 720), (image.Width, image.Height));
         Assert.True(image.TryGetRawData(out var pointer));
         Assert.Equal((byte)31, *(byte*)pointer);
+        Assert.Equal((byte)131, *((byte*)pointer + (image.Height - 1) * image.Width * image.Channels));
         Assert.Equal(MaaJobStatus.Succeeded, outer.Click(679, 256).Wait());
         Assert.Contains((1358, 592), fixture.Backend.Points);
         fixture.Backend.Points.Clear();
@@ -95,6 +116,24 @@ public partial class LetterboxTests
         Assert.True(fixture.Backend.WasInactive);
     }
 
+    [Theory]
+    [InlineData(1280, 800, 40)]
+    [InlineData(1366, 855, 44)]
+    public unsafe void CropPreservesBothBoundaryRows(int width, int height, int top)
+    {
+        var contentHeight = width == 1280 ? 720 : 768;
+        var backend = new FakeController { Width = width, Height = height, Top = top };
+        using var adapter = new LetterboxController(new MaaCustomController(backend), () => (width, height));
+        using var image = new MaaImageBuffer();
+        Assert.True(adapter.Screencap(image));
+        Assert.Equal((width, contentHeight), (image.Width, image.Height));
+        Assert.True(image.TryGetRawData(out var pointer));
+        var first = new ReadOnlySpan<byte>((void*)pointer, 3);
+        var last = new ReadOnlySpan<byte>((byte*)pointer + (contentHeight - 1) * width * 3, 3);
+        Assert.Equal(new byte[] { 31, 71, 109 }, first.ToArray());
+        Assert.Equal(new byte[] { 131, (byte)(71 + (contentHeight - 1) % 127), 109 }, last.ToArray());
+    }
+
     [Fact]
     public void ResizeAndInvalidCaptureBlockInputButAllowReleaseAndRecovery()
     {
@@ -105,6 +144,10 @@ public partial class LetterboxTests
         Assert.Equal(MaaJobStatus.Failed, outer.TouchDown(0, 5, 5).Wait());
         Assert.Empty(fixture.Backend.Points);
         Assert.Equal(MaaJobStatus.Succeeded, outer.TouchUp(0).Wait());
+        fixture.Size = (2560, 1600);
+        Assert.Equal(MaaJobStatus.Failed, outer.TouchDown(0, 5, 5).Wait());
+        Assert.Empty(fixture.Backend.Points); // A resize back still needs a new screenshot.
+        fixture.Size = (1280, 720);
         fixture.Backend.Width = 1280; fixture.Backend.Height = 720;
         Assert.Equal(MaaJobStatus.Succeeded, outer.Screencap().Wait());
         Assert.Equal(MaaJobStatus.Succeeded, outer.Click(300, 200).Wait());
@@ -141,16 +184,18 @@ public partial class LetterboxTests
         Assert.Equal(1, fixture.Backend.DisposeCount);
     }
 
-    internal static byte[] Image(int width, int height)
+    internal static byte[] Image(int width, int height, int? contentRows = null, int? contentTop = null)
     {
         var pixels = new byte[width * height * 3];
-        var contentHeight = Math.Min(height, width / 16 * 9);
-        var top = (height - contentHeight) / 2;
+        var contentHeight = contentRows ?? Math.Min(height, (int)Math.Round(width * 9.0 / 16));
+        var top = contentTop ?? (height - contentHeight) / 2;
         for (var y = top; y < top + contentHeight; y++)
         for (var x = 0; x < width; x++)
         {
             var offset = (y * width + x) * 3;
-            pixels[offset] = 31; pixels[offset + 1] = 71; pixels[offset + 2] = 109;
+            pixels[offset] = (byte)(y - top < contentHeight / 2 ? 31 : 131);
+            pixels[offset + 1] = (byte)(71 + (y - top) % 127);
+            pixels[offset + 2] = 109;
         }
         return pixels;
     }
@@ -173,6 +218,7 @@ public partial class LetterboxTests
     {
         public string Name { get; set; } = "SyntheticLetterbox";
         public int Width = 2560, Height = 1600;
+        public int? Top;
         public bool ValidBars = true, CaptureFails, WasInactive;
         public int DisposeCount;
         public List<(int, int)> Points = [];
@@ -188,7 +234,7 @@ public partial class LetterboxTests
         public unsafe bool Screencap(IMaaImageBuffer buffer)
         {
             if (CaptureFails) return false;
-            var bytes = Image(Width, Height);
+            var bytes = Image(Width, Height, contentTop: Top);
             if (!ValidBars) Array.Fill(bytes, (byte)100);
             fixed (byte* pointer = bytes)
                 return ((MaaImageBuffer)buffer).TrySetRawData((nint)pointer, Width, Height, 16);

@@ -12,6 +12,7 @@ namespace MaaKes.Custom;
 public sealed class MaaKesLetterbox : IMaaCustomAction
 {
     private static readonly ConditionalWeakTable<MaaController, LetterboxController> Sessions = new();
+    private static readonly ConditionalWeakTable<MaaTasker, object> TaskerGates = new();
     private readonly Func<MaaController, LetterboxController> _create;
     public string Name { get; set; } = "MaaKesLetterbox";
 
@@ -33,6 +34,12 @@ public sealed class MaaKesLetterbox : IMaaCustomAction
     }
 
     internal bool SetEnabled(MaaTasker tasker, bool enabled)
+    {
+        lock (TaskerGates.GetValue(tasker, _ => new object()))
+            return SetEnabledCore(tasker, enabled);
+    }
+
+    private bool SetEnabledCore(MaaTasker tasker, bool enabled)
     {
         var current = tasker.Controller;
         if (Sessions.TryGetValue(current, out var session))
@@ -81,7 +88,7 @@ public sealed class MaaKesLetterbox : IMaaCustomAction
             throw new NotSupportedException("Letterbox cropping requires a Win32 controller.");
         using var document = JsonDocument.Parse(original.Info ?? "{}");
         var info = document.RootElement;
-        if (info.GetProperty("type").GetString() != "win32")
+        if (!string.Equals(info.GetProperty("type").GetString(), "win32", StringComparison.OrdinalIgnoreCase))
             throw new NotSupportedException("The controller is not a Win32 window.");
         var hwnd = new nint(info.GetProperty("hwnd").GetInt64());
         var raw = new MaaWin32Controller(hwnd,
@@ -117,37 +124,41 @@ internal readonly record struct LetterboxViewport(int SourceWidth, int SourceHei
 
         // Existing 16:9 (or wider) screenshots pass through. This option only removes
         // horizontal letterbox bars, never guesses an arbitrary dark content rectangle.
-        if ((long)width * 9 >= (long)height * 16)
+        var contentHeight = (int)(((long)width * 9 + 8) / 16);
+        if (height <= contentHeight)
         {
             viewport = new(width, height, 0, height);
             return true;
         }
 
-        if (width % 16 != 0)
-            return false;
-        var contentHeight = width / 16 * 9;
         var difference = height - contentHeight;
-        if (difference % 2 != 0)
-            return false;
-        var top = difference / 2;
-        if (!IsBlackBand(pixels, width, channels, 0, top)
-            || !IsBlackBand(pixels, width, channels, top + contentHeight, height))
-            return false;
-
-        viewport = new(width, height, top, contentHeight);
-        return true;
+        // Pixel rounding may put the extra row on either black band.
+        for (var top = difference / 2; top <= (difference + 1) / 2; top++)
+        {
+            if (!IsBlackBand(pixels, width, channels, 0, top)
+                || !IsBlackBand(pixels, width, channels, top + contentHeight, height))
+                continue;
+            viewport = new(width, height, top, contentHeight);
+            return true;
+        }
+        return false;
     }
 
     private static bool IsBlackBand(ReadOnlySpan<byte> pixels, int width, int channels, int start, int end)
     {
         long dark = 0, total = 0;
-        for (var y = start; y < end; y += 4)
-        for (var x = 0; x < width; x += 4)
+        if (start == end) return true;
+        for (var y = start; ; y = Math.Min(y + 4, end - 1))
         {
-            var offset = (y * width + x) * channels;
-            if (pixels[offset] <= 16 && pixels[offset + 1] <= 16 && pixels[offset + 2] <= 16)
-                dark++;
-            total++;
+            for (var x = 0; x < width; x += 4)
+            {
+                var offset = (y * width + x) * channels;
+                if (pixels[offset] <= 16 && pixels[offset + 1] <= 16 && pixels[offset + 2] <= 16)
+                    dark++;
+                total++;
+            }
+            // Include both band boundaries, including a one-pixel band.
+            if (y == end - 1) break;
         }
         return total > 0 && dark * 1000 >= total * 995;
     }
@@ -252,9 +263,18 @@ internal sealed class LetterboxController : IMaaCustomController
         return true;
     }
 
-    private bool TryMap(ref int x, ref int y) => _viewport is { } viewport
-        && _clientSize() == (viewport.SourceWidth, viewport.SourceHeight)
-        && viewport.TryMap(ref x, ref y);
+    private bool TryMap(ref int x, ref int y)
+    {
+        if (_viewport is not { } viewport) return false;
+        if (_clientSize() != (viewport.SourceWidth, viewport.SourceHeight))
+        {
+            _viewport = null; // Require a fresh frame even if the size changes back.
+            return false;
+        }
+        // Check immediately before enqueueing input. Windows resizing and native
+        // input dispatch cannot be made atomic through the controller API.
+        return viewport.TryMap(ref x, ref y);
+    }
 
     public bool Click(int x, int y) => Guard(() => TryMap(ref x, ref y) && Succeeded(_inner.Click(x, y)));
     public bool Swipe(int x1, int y1, int x2, int y2, int duration) => Guard(() =>

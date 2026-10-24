@@ -19,5 +19,8 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
     <Compile Include="../../assets/resource/custom/MaaKesLetterbox.cs" Link="MaaKesLetterbox.cs" />
     <None Include="../../assets/resource/custom/MaaKesLetterbox.cs" Link="CustomSource.cs.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../assets/interface.json" Link="shipped/interface.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../assets/tasks/黑边适配.json" Link="shipped/tasks/黑边适配.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../assets/resource/pipeline/黑边适配.json" Link="shipped/resource/pipeline/黑边适配.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
